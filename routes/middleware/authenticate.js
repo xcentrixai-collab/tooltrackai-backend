@@ -1,38 +1,33 @@
-const jwt = require('jsonwebtoken');
+// routes/middleware/authenticate.js
 
-module.exports = function (req, res, next) {
+const jwt = require("jsonwebtoken");
+
+module.exports = function authenticate(req, res, next) {
     try {
-        let token = null;
+        const header = req.headers.authorization;
 
-        // Authorization header: Bearer <token>
-        const authHeader = req.headers['authorization'];
-        if (authHeader && authHeader.startsWith("Bearer ")) {
-            token = authHeader.split(" ")[1];
+        if (!header) {
+            return res.status(401).json({ message: "No token provided" });
         }
 
-        // fallback to cookie (if frontend uses httpOnly cookie)
-        if (!token && req.cookies && req.cookies.access_token) {
-            token = req.cookies.access_token;
+        const token = header.split(" ")[1];
+
+        if (!token) {
+            return res.status(401).json({ message: "Invalid token format" });
         }
 
-        if (!token) return res.status(401).json({ error: "No token provided" });
+        jwt.verify(token, process.env.JWT_ACCESS_SECRET, (err, decoded) => {
+            if (err) {
+                return res.status(403).json({ message: "Token invalid or expired" });
+            }
 
-        const payload = jwt.verify(
-            token,
-            process.env.JWT_ACCESS_SECRET
-        );
+            req.user = decoded;
+            next();
+        });
 
-        // attach user payload to request
-        req.user = {
-            id: payload.id,
-            email: payload.email,
-            role: payload.role,
-            company_id: payload.company_id
-        };
-
-        next();
-    } catch (err) {
-        return res.status(401).json({ error: "Invalid or expired token" });
+    } catch (error) {
+        console.error("AUTH ERROR:", error);
+        res.status(500).json({ message: "Auth middleware failed" });
     }
 };
 
